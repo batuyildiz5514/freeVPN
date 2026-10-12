@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import select
 import struct
 import subprocess
 from typing import Optional
@@ -45,13 +46,13 @@ class LinuxTunDevice:
         # 2. Enable kernel IPv4 packet forwarding
         subprocess.run("sysctl -w net.ipv4.ip_forward=1", shell=True, capture_output=True)
 
-        # 3. Detect default physical outgoing network interface (e.g. eth0, enp3s0)
+        # 3. Detect default physical outgoing network interface (e.g. eth0, ens3)
         try:
             out_iface = subprocess.check_output(
                 "ip route show default | awk '{print $5}'", shell=True, text=True
             ).strip().splitlines()[0]
         except Exception:
-            out_iface = "eth0"
+            out_iface = "ens3"
 
         # 4. Set iptables NAT masquerade rule
         rule_check = f"iptables -t nat -C POSTROUTING -s {self.ip_cidr} -o {out_iface} -j MASQUERADE 2>/dev/null"
@@ -65,10 +66,17 @@ class LinuxTunDevice:
         subprocess.run(f"iptables -A FORWARD -i {self.dev_name} -j ACCEPT 2>/dev/null", shell=True)
         subprocess.run(f"iptables -A FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT 2>/dev/null", shell=True)
 
-    def read_packet(self, max_size: int = 2048) -> bytes:
-        """Reads a decrypted raw IP packet from Linux kernel."""
+    def read_packet(self, timeout_ms: int = 100, max_size: int = 2048) -> Optional[bytes]:
+        """Reads a decrypted raw IP packet from Linux kernel with non-blocking timeout."""
         assert self._fd is not None
-        return os.read(self._fd, max_size)
+        timeout_sec = (timeout_ms / 1000.0) if timeout_ms else 0.0
+        r, _, _ = select.select([self._fd], [], [], timeout_sec)
+        if not r:
+            return None
+        try:
+            return os.read(self._fd, max_size)
+        except OSError:
+            return None
 
     def write_packet(self, packet: bytes) -> bool:
         """Injects a packet into the Linux kernel for NAT internet forwarding."""

@@ -254,14 +254,15 @@ class PyVPNApp(ctk.CTk):
 
     def _worker_connect(self) -> None:
         try:
+            self.cfg = load_config()
             key = get_crypto_key(self.cfg)
             crypto = CryptoSession(key)
 
-            client_ip = self.cfg.get("client_ip", "10.0.0.2")
+            client_ip = self.cfg.get("client_ip", "10.8.0.2")
             subnet_mask = self.cfg.get("subnet_mask", "255.255.255.0")
             server_host = self.cfg["server_host"]
             server_port = int(self.cfg["server_port"])
-            vpn_gw = self.cfg.get("server_vpn_ip", "10.0.0.1")
+            vpn_gw = self.cfg.get("server_vpn_ip", "10.8.0.1")
 
             self.adapter = WintunAdapter(name="PyVPN", tunnel_type="PyVPN")
             self.adapter.configure_ip(client_ip, subnet_mask)

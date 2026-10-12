@@ -57,12 +57,12 @@ def main():
             down_kbps = stats["download_kbps"]
             rx_mb = stats["bytes_recv"] / (1024 * 1024)
             tx_mb = stats["bytes_sent"] / (1024 * 1024)
-            sys.stdout.write(
-                f"\r[SERVER STATS] Inbound: {rx_mb:.2f} MB ({down_kbps:.1f} Kbps) | "
+            print(
+                f"[SERVER STATS] Inbound: {rx_mb:.2f} MB ({down_kbps:.1f} Kbps) | "
                 f"Outbound: {tx_mb:.2f} MB ({up_kbps:.1f} Kbps) | "
-                f"Packets: In {stats['packets_recv']} / Out {stats['packets_sent']} "
+                f"Packets: In {stats['packets_recv']} / Out {stats['packets_sent']}",
+                flush=True
             )
-            sys.stdout.flush()
     except KeyboardInterrupt:
         print("\n\n[*] Stopping PyVPN Server...")
     finally:

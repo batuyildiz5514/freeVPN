@@ -257,9 +257,9 @@ class ServerTunnel:
                     if endpoint:
                         self._transport.send_encrypted(packet, endpoint)
                         self.metrics.add_sent(len(packet))
-            except Exception:
-                if not self._stop_event.is_set():
-                    self.metrics.add_dropped()
+        except Exception as exc:
+            if not self._stop_event.is_set():
+                self.metrics.add_dropped()
 
     def stop(self) -> None:
         self._stop_event.set()
