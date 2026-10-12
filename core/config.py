@@ -8,8 +8,19 @@ from typing import Any, Dict
 
 from core.crypto import generate_key, key_from_base64, key_to_base64
 
-CONFIG_FILE = Path(__file__).resolve().parent.parent / "config.json"
-EXAMPLE_CONFIG_FILE = Path(__file__).resolve().parent.parent / "config.example.json"
+import sys
+
+def get_config_path() -> Path:
+    """Returns the active configuration file path for both dev and bundled modes."""
+    if getattr(sys, "frozen", False):
+        exe_dir_cfg = Path(sys.executable).resolve().parent / "config.json"
+        if exe_dir_cfg.exists():
+            return exe_dir_cfg
+        meipass_cfg = Path(getattr(sys, "_MEIPASS", "")) / "config.json"
+        if meipass_cfg.exists():
+            return meipass_cfg
+        return exe_dir_cfg
+    return Path(__file__).resolve().parent.parent / "config.json"
 
 DEFAULT_CONFIG: Dict[str, Any] = {
     "server_host": "127.0.0.1",
@@ -24,8 +35,9 @@ DEFAULT_CONFIG: Dict[str, Any] = {
 
 def load_config() -> Dict[str, Any]:
     """Loads configuration from config.json, or creates a default one with a freshly generated key."""
-    if CONFIG_FILE.exists():
-        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+    cfg_file = get_config_path()
+    if cfg_file.exists():
+        with open(cfg_file, "r", encoding="utf-8") as f:
             cfg = json.load(f)
             # Ensure all default keys exist
             for k, v in DEFAULT_CONFIG.items():
@@ -42,7 +54,8 @@ def load_config() -> Dict[str, Any]:
 
 def save_config(cfg: Dict[str, Any]) -> None:
     """Save configuration dictionary to config.json."""
-    with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+    cfg_file = get_config_path()
+    with open(cfg_file, "w", encoding="utf-8") as f:
         json.dump(cfg, f, indent=2)
 
 

@@ -66,7 +66,13 @@ class WintunDriver:
             return cls._instance
 
         if dll_path is None:
-            dll_path = str(Path(__file__).resolve().parent.parent / "wintun.dll")
+            if getattr(sys, "frozen", False):
+                base_dir = getattr(sys, "_MEIPASS", os.path.dirname(sys.executable))
+                dll_path = os.path.join(base_dir, "wintun.dll")
+                if not os.path.exists(dll_path):
+                    dll_path = os.path.join(os.path.dirname(sys.executable), "wintun.dll")
+            else:
+                dll_path = str(Path(__file__).resolve().parent.parent / "wintun.dll")
 
         if not os.path.exists(dll_path):
             raise FileNotFoundError(f"Wintun DLL not found at: {dll_path}")

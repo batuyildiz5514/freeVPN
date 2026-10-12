@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+import sys
 import threading
 import time
 from typing import Optional
@@ -40,6 +42,20 @@ class PyVPNApp(ctk.CTk):
         self.minsize(420, 600)
         ctk.set_appearance_mode("Dark")
         ctk.set_default_color_theme("blue")
+
+        # Window icon
+        for candidate in [
+            os.path.join(getattr(sys, "_MEIPASS", ""), "pyvpn.ico"),
+            os.path.join(os.path.dirname(sys.executable), "pyvpn.ico"),
+            os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "pyvpn.ico"),
+            "pyvpn.ico",
+        ]:
+            if candidate and os.path.exists(candidate):
+                try:
+                    self.iconbitmap(candidate)
+                    break
+                except Exception:
+                    pass
 
         self.cfg = load_config()
         self.tunnel: Optional[ClientTunnel] = None
