@@ -1,0 +1,54 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Dağıtım / Build çıktıları
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Sanal Ortamlar (Virtual Environments)
+venv/
+.venv/
+env/
+ENV/
+
+# Kişisel Yapılandırma ve Gizli Anahtarlar (Kesinlikle repoya yüklenmez!)
+config.json
+*.key
+*.pem
+*.secret
+*.env
+server_ip.txt
+
+# Loglar ve Geçici Dosyalar
+*.log
+*.tmp
+debug/
+
+# IDE & Editör ayarları
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# İşletim sistemi dosyaları
+Thumbs.db
+Desktop.ini
+.DS_Store
