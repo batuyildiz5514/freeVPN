@@ -166,17 +166,17 @@ class ServerTunnel:
         bind_host: str,
         bind_port: int,
         crypto_session: CryptoSession,
-        wintun_adapter: Optional[WintunAdapter] = None,
+        tun_device: Optional[Any] = None,
         status_callback: Optional[Callable[[str], None]] = None,
     ):
         self.bind_address = (bind_host, bind_port)
         self.crypto = crypto_session
-        self.adapter = wintun_adapter
+        self.tun_device = tun_device
         self.status_callback = status_callback
         self.metrics = TunnelMetrics()
 
         self._transport: Optional[EncryptedUDPTransport] = None
-        self._wintun_session: Optional[WintunSession] = None
+        self._tun_session: Optional[Any] = None
         self._stop_event = threading.Event()
         self._threads: list[threading.Thread] = []
 
@@ -194,11 +194,16 @@ class ServerTunnel:
         self._transport.bind(self.bind_address[0], self.bind_address[1])
         self._transport.settimeout(0.2)
 
-        if self.adapter:
-            self._wintun_session = self.adapter.start_session()
-            t_wintun = threading.Thread(target=self._worker_wintun_to_clients, name="Server-WintunOut", daemon=True)
-            self._threads.append(t_wintun)
-            t_wintun.start()
+        if self.tun_device:
+            # WintunAdapter requires start_session(), LinuxTunDevice is already active
+            if hasattr(self.tun_device, "start_session"):
+                self._tun_session = self.tun_device.start_session()
+            else:
+                self._tun_session = self.tun_device
+
+            t_tun = threading.Thread(target=self._worker_tun_to_clients, name="Server-TunOut", daemon=True)
+            self._threads.append(t_tun)
+            t_tun.start()
 
         t_udp = threading.Thread(target=self._worker_udp_listener, name="Server-UDPIn", daemon=True)
         self._threads.append(t_udp)
@@ -219,8 +224,8 @@ class ServerTunnel:
                     with self._lock:
                         self._client_endpoints[src_ip] = sender
 
-                if self._wintun_session:
-                    self._wintun_session.write_packet(packet)
+                if self._tun_session:
+                    self._tun_session.write_packet(packet)
                 else:
                     # Echo mode if running without server TUN adapter
                     self._transport.send_encrypted(packet, sender)
@@ -234,13 +239,13 @@ class ServerTunnel:
                 if not self._stop_event.is_set():
                     self.metrics.add_dropped()
 
-    def _worker_wintun_to_clients(self) -> None:
-        assert self._wintun_session is not None
+    def _worker_tun_to_clients(self) -> None:
+        assert self._tun_session is not None
         assert self._transport is not None
 
         while not self._stop_event.is_set():
             try:
-                packet = self._wintun_session.read_packet(timeout_ms=100)
+                packet = self._tun_session.read_packet(timeout_ms=100) if hasattr(self._tun_session, "read_packet") else self._tun_session.read_packet()
                 if not packet:
                     continue
 
@@ -262,9 +267,10 @@ class ServerTunnel:
             t.join(timeout=1.0)
         self._threads.clear()
 
-        if self._wintun_session:
-            self._wintun_session.close()
-            self._wintun_session = None
+        if self._tun_session:
+            if hasattr(self._tun_session, "close"):
+                self._tun_session.close()
+            self._tun_session = None
 
         if self._transport:
             self._transport.close()

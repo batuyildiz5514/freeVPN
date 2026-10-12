@@ -28,11 +28,21 @@ def main():
     key = get_crypto_key(cfg)
     crypto = CryptoSession(key)
 
+    tun_dev = None
+    if sys.platform.startswith("linux"):
+        try:
+            from core.linux_tun import LinuxTunDevice
+            print("[*] Linux detected. Initializing kernel TUN interface (tun0) with NAT masquerading...")
+            tun_dev = LinuxTunDevice(dev_name="tun0", ip_cidr="10.0.0.1/24")
+            print("[✓] Linux TUN device and iptables NAT configured successfully.")
+        except Exception as exc:
+            print(f"[!] Warning: Could not initialize Linux TUN ({exc}). Running in relay mode.")
+
     server = ServerTunnel(
         bind_host=bind_host,
         bind_port=bind_port,
         crypto_session=crypto,
-        wintun_adapter=None,  # Runs in UDP decapsulation / relay mode
+        tun_device=tun_dev,
         status_callback=lambda msg: print(f"[SERVER] {msg}"),
     )
 
