@@ -7,6 +7,7 @@ import time
 
 from core.config import get_crypto_key, load_config
 from core.crypto import CryptoSession
+from core.routing import RoutingManager
 from core.tunnel import ClientTunnel
 from core.wintun import WintunAdapter, is_admin, request_admin_elevation
 
@@ -41,9 +42,20 @@ def main():
 
     print("[*] Initializing Wintun virtual adapter...")
     adapter = WintunAdapter(name="PyVPN", tunnel_type="PyVPN")
+    routing = RoutingManager(
+        adapter_name="PyVPN",
+        dns_servers=[cfg.get("dns_server", "1.1.1.1")],
+    )
+
     try:
         adapter.configure_ip(client_ip, subnet_mask)
         print("[*] Virtual adapter configured successfully.")
+
+        # Activate Windows routing table rules if connected to external server
+        vpn_gateway = cfg.get("server_vpn_ip", "10.0.0.1")
+        if server_host not in ("127.0.0.1", "localhost", "0.0.0.0"):
+            print(f"[*] Applying Windows routing & DNS protection via gateway {vpn_gateway}...")
+            routing.setup_routes(server_ip=server_host, vpn_gateway=vpn_gateway)
 
         tunnel = ClientTunnel(
             server_host=server_host,
@@ -73,9 +85,10 @@ def main():
     except KeyboardInterrupt:
         print("\n\n[*] Disconnecting VPN tunnel gracefully...")
     finally:
+        routing.restore_routes()
         tunnel.stop()
         adapter.close()
-        print("[*] VPN tunnel closed.")
+        print("[*] VPN tunnel closed and routes restored.")
 
 
 if __name__ == "__main__":

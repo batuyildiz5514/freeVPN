@@ -78,7 +78,7 @@ This repository is designed from day one to be safely published on GitHub:
   - Bind `wintun.dll` via Python `ctypes` and initialize ring buffers for raw packet I/O.
 - [x] **Phase 3: End-to-End Packet Tunneling**
   - Bidirectional packet routing between the virtual interface and the encrypted UDP transport.
-- [ ] **Phase 4: Routing Table & DNS Management**
+- [x] **Phase 4: Routing Table & DNS Management**
   - Automatic default gateway switching and leak-free DNS routing via Windows IP Helper APIs.
 - [ ] **Phase 5: Modern GUI & System Tray Integration**
   - Intuitive desktop UI (CustomTkinter) with system tray support (`pystray`), live transfer speed, and connection statistics.
