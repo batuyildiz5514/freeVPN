@@ -47,12 +47,12 @@ def main():
         dns_servers=[cfg.get("dns_server", "1.1.1.1")],
     )
 
+    vpn_gateway = cfg.get("server_vpn_ip", "10.8.0.1")
     try:
-        adapter.configure_ip(client_ip, subnet_mask)
+        adapter.configure_ip(client_ip, subnet_mask, gateway=vpn_gateway)
         print("[*] Virtual adapter configured successfully.")
 
         # Activate Windows routing table rules if connected to external server
-        vpn_gateway = cfg.get("server_vpn_ip", "10.0.0.1")
         if server_host not in ("127.0.0.1", "localhost", "0.0.0.0"):
             print(f"[*] Applying Windows routing & DNS protection via gateway {vpn_gateway}...")
             routing.setup_routes(server_ip=server_host, vpn_gateway=vpn_gateway)

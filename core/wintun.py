@@ -221,10 +221,11 @@ class WintunAdapter:
                 error_code = ctypes.windll.kernel32.GetLastError()
                 raise RuntimeError(f"Failed to create Wintun adapter '{self.name}'. Win32 Error: {error_code}")
 
-    def configure_ip(self, ip_address: str, subnet_mask: str = "255.255.255.0", mtu: int = 1420) -> None:
-        """Configure IP address, subnet mask, and MTU on the adapter using netsh."""
-        # 1. Set static IP address
-        cmd_ip = f'netsh interface ip set address name="{self.name}" static {ip_address} {subnet_mask} none'
+    def configure_ip(self, ip_address: str, subnet_mask: str = "255.255.255.0", gateway: Optional[str] = None, mtu: int = 1420) -> None:
+        """Configure IP address, subnet mask, gateway, and MTU on the adapter using netsh."""
+        # 1. Set static IP address with gateway
+        gw_clause = f"{gateway} 1" if gateway else "none"
+        cmd_ip = f'netsh interface ip set address name="{self.name}" static {ip_address} {subnet_mask} {gw_clause}'
         res_ip = subprocess.run(cmd_ip, shell=True, capture_output=True, text=True)
         if res_ip.returncode != 0:
             raise RuntimeError(f"Failed to configure IP on adapter '{self.name}': {res_ip.stderr.strip() or res_ip.stdout.strip()}")

@@ -265,7 +265,7 @@ class PyVPNApp(ctk.CTk):
             vpn_gw = self.cfg.get("server_vpn_ip", "10.8.0.1")
 
             self.adapter = WintunAdapter(name="PyVPN", tunnel_type="PyVPN")
-            self.adapter.configure_ip(client_ip, subnet_mask)
+            self.adapter.configure_ip(client_ip, subnet_mask, gateway=vpn_gw)
 
             self.routing = RoutingManager(
                 adapter_name="PyVPN",

@@ -55,6 +55,16 @@ class RoutingManager:
     def _run_cmd(self, cmd: str) -> subprocess.CompletedProcess:
         return subprocess.run(cmd, shell=True, capture_output=True, text=True)
 
+    def _get_adapter_index(self) -> Optional[int]:
+        try:
+            cmd = f'powershell -Command "(Get-NetAdapter -Name \'{self.adapter_name}\' -ErrorAction SilentlyContinue).ifIndex"'
+            out = subprocess.check_output(cmd, shell=True, text=True).strip()
+            if out:
+                return int(out.splitlines()[0])
+        except Exception:
+            pass
+        return None
+
     def setup_routes(self, server_ip: str, vpn_gateway: str) -> None:
         """Injects routing table entries to direct all traffic into the VPN tunnel.
         
@@ -70,14 +80,18 @@ class RoutingManager:
         self._original_gateway = orig_gw
         self._vpn_gateway = vpn_gateway
 
+        # Discover Wintun interface index
+        if_idx = self._get_adapter_index()
+        if_clause = f" if {if_idx}" if if_idx else ""
+
         # 1. Exception route: Route to VPN server IP via original gateway (prevents routing loop)
         if server_ip not in ("127.0.0.1", "localhost", "0.0.0.0"):
             self._run_cmd(f"route add {server_ip} mask 255.255.255.255 {orig_gw} metric 1")
 
         # 2. Split tunnel default routes: 0.0.0.0/1 and 128.0.0.0/1 via VPN gateway
         # Longest prefix match ensures these take precedence over 0.0.0.0/0
-        self._run_cmd(f"route add 0.0.0.0 mask 128.0.0.0 {vpn_gateway} metric 1")
-        self._run_cmd(f"route add 128.0.0.0 mask 128.0.0.0 {vpn_gateway} metric 1")
+        self._run_cmd(f"route add 0.0.0.0 mask 128.0.0.0 {vpn_gateway}{if_clause} metric 1")
+        self._run_cmd(f"route add 128.0.0.0 mask 128.0.0.0 {vpn_gateway}{if_clause} metric 1")
 
         # 3. Configure DNS on the VPN interface to prevent DNS leaks
         if self.dns_servers:
