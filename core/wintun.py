@@ -149,21 +149,47 @@ class WintunSession:
         Returns:
             bytes: The raw IP packet, or None if timeout expired.
         """
-        # Wait for the event signaled by the driver when data is available
+        pkts = self.read_packets(max_packets=1, timeout_ms=timeout_ms)
+        return pkts[0] if pkts else None
+
+    def read_packets(self, max_packets: int = 64, timeout_ms: int = 20) -> list[bytes]:
+        """Reads a burst of packets from the ring buffer without unnecessary event waiting.
+        
+        Drains all currently pending packets in the Wintun ring buffer up to max_packets.
+        If no packets are available, waits up to timeout_ms on the driver event handle.
+        """
+        packets = []
+        size = wintypes.DWORD()
+
+        # Step 1: Drain whatever is already queued in the ring buffer
+        while len(packets) < max_packets:
+            packet_ptr = self._driver.dll.WintunReceivePacket(self._handle, ctypes.byref(size))
+            if not packet_ptr:
+                break
+            try:
+                packets.append(bytes(ctypes.string_at(packet_ptr, size.value)))
+            finally:
+                self._driver.dll.WintunReleaseReceivePacket(self._handle, packet_ptr)
+
+        if packets:
+            return packets
+
+        # Step 2: Ring buffer is empty, wait for driver to signal new data
         ret = ctypes.windll.kernel32.WaitForSingleObject(self._wait_event, timeout_ms)
         if ret == self.WAIT_TIMEOUT:
-            return None
+            return packets
 
-        size = wintypes.DWORD()
-        packet_ptr = self._driver.dll.WintunReceivePacket(self._handle, ctypes.byref(size))
-        if not packet_ptr:
-            return None
+        # Step 3: Event signaled, drain available packets
+        while len(packets) < max_packets:
+            packet_ptr = self._driver.dll.WintunReceivePacket(self._handle, ctypes.byref(size))
+            if not packet_ptr:
+                break
+            try:
+                packets.append(bytes(ctypes.string_at(packet_ptr, size.value)))
+            finally:
+                self._driver.dll.WintunReleaseReceivePacket(self._handle, packet_ptr)
 
-        try:
-            packet_len = size.value
-            return bytes(ctypes.string_at(packet_ptr, packet_len))
-        finally:
-            self._driver.dll.WintunReleaseReceivePacket(self._handle, packet_ptr)
+        return packets
 
     def write_packet(self, packet: bytes) -> bool:
         """Injects a raw IP packet into the virtual network adapter.

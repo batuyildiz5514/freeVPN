@@ -40,7 +40,7 @@ def test_server_tunnel_packet_routing():
         bind_host="127.0.0.1",
         bind_port=test_port,
         crypto_session=crypto,
-        wintun_adapter=None,  # Test echo / decapsulation mode
+        tun_device=None,  # Test echo / decapsulation mode
     )
     server.start()
     time.sleep(0.2)

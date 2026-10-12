@@ -331,6 +331,12 @@ class PyVPNApp(ctk.CTk):
         self.tray_icon.icon = create_tray_icon_image(False)
         self.tray_icon.title = "PyVPN - Disconnected"
 
+    @staticmethod
+    def _format_speed(kbps: float) -> str:
+        if kbps >= 1000:
+            return f"{kbps / 1000:.1f} Mbps"
+        return f"{kbps:.1f} Kbps"
+
     def _poll_metrics(self) -> None:
         if self.is_connected and self.tunnel:
             stats = self.tunnel.metrics.snapshot()
@@ -339,10 +345,10 @@ class PyVPNApp(ctk.CTk):
             tx_mb = stats["bytes_sent"] / (1024 * 1024)
             rx_mb = stats["bytes_recv"] / (1024 * 1024)
 
-            self.tx_speed_label.configure(text=f"{up_kbps:.1f} Kbps")
+            self.tx_speed_label.configure(text=self._format_speed(up_kbps))
             self.tx_total_label.configure(text=f"Total: {tx_mb:.2f} MB")
 
-            self.rx_speed_label.configure(text=f"{down_kbps:.1f} Kbps")
+            self.rx_speed_label.configure(text=self._format_speed(down_kbps))
             self.rx_total_label.configure(text=f"Total: {rx_mb:.2f} MB")
         else:
             self.tx_speed_label.configure(text="0.0 Kbps")

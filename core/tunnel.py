@@ -28,6 +28,11 @@ class TunnelMetrics:
         self.packets_recv: int = 0
         self.dropped_packets: int = 0
         self.start_time: float = time.time()
+        self._last_snapshot_time: float = time.time()
+        self._last_bytes_sent: int = 0
+        self._last_bytes_recv: int = 0
+        self._instant_upload_kbps: float = 0.0
+        self._instant_download_kbps: float = 0.0
 
     def add_sent(self, size: int) -> None:
         with self._lock:
@@ -45,15 +50,25 @@ class TunnelMetrics:
 
     def snapshot(self) -> dict:
         with self._lock:
-            elapsed = max(0.1, time.time() - self.start_time)
+            now = time.time()
+            dt = now - self._last_snapshot_time
+            if dt >= 0.2:
+                delta_tx = self.bytes_sent - self._last_bytes_sent
+                delta_rx = self.bytes_recv - self._last_bytes_recv
+                self._instant_upload_kbps = (delta_tx * 8 / 1024) / dt
+                self._instant_download_kbps = (delta_rx * 8 / 1024) / dt
+                self._last_bytes_sent = self.bytes_sent
+                self._last_bytes_recv = self.bytes_recv
+                self._last_snapshot_time = now
+
             return {
                 "bytes_sent": self.bytes_sent,
                 "bytes_recv": self.bytes_recv,
                 "packets_sent": self.packets_sent,
                 "packets_recv": self.packets_recv,
                 "dropped_packets": self.dropped_packets,
-                "upload_kbps": (self.bytes_sent * 8 / 1024) / elapsed,
-                "download_kbps": (self.bytes_recv * 8 / 1024) / elapsed,
+                "upload_kbps": self._instant_upload_kbps,
+                "download_kbps": self._instant_download_kbps,
             }
 
 
@@ -87,7 +102,7 @@ class ClientTunnel:
         """Start the tunnel workers."""
         self._stop_event.clear()
         self._transport = EncryptedUDPTransport(self.crypto)
-        self._transport.settimeout(0.2)
+        self._transport.settimeout(0.05)
         self._wintun_session = self.adapter.start_session()
 
         # Thread 1: Wintun -> UDP (Outgoing traffic)
@@ -107,8 +122,8 @@ class ClientTunnel:
 
         while not self._stop_event.is_set():
             try:
-                packet = self._wintun_session.read_packet(timeout_ms=100)
-                if packet:
+                packets = self._wintun_session.read_packets(max_packets=64, timeout_ms=20)
+                for packet in packets:
                     self._transport.send_encrypted(packet, self.server_endpoint)
                     self.metrics.add_sent(len(packet))
             except Exception:
@@ -192,7 +207,7 @@ class ServerTunnel:
         self._stop_event.clear()
         self._transport = EncryptedUDPTransport(self.crypto)
         self._transport.bind(self.bind_address[0], self.bind_address[1])
-        self._transport.settimeout(0.2)
+        self._transport.settimeout(0.05)
 
         if self.tun_device:
             # WintunAdapter requires start_session(), LinuxTunDevice is already active
@@ -245,17 +260,21 @@ class ServerTunnel:
 
         while not self._stop_event.is_set():
             try:
-                packet = self._tun_session.read_packet(timeout_ms=100) if hasattr(self._tun_session, "read_packet") else self._tun_session.read_packet()
-                if not packet:
-                    continue
+                if hasattr(self._tun_session, "read_packets"):
+                    packets = self._tun_session.read_packets(max_packets=64, timeout_ms=20)
+                else:
+                    pkt = self._tun_session.read_packet(timeout_ms=20)
+                    packets = [pkt] if pkt else []
 
-                # Parse IPv4 destination IP
-                if len(packet) >= 20 and (packet[0] >> 4) == 4:
-                    dst_ip = f"{packet[16]}.{packet[17]}.{packet[18]}.{packet[19]}"
-                    with self._lock:
-                        endpoint = self._client_endpoints.get(dst_ip)
-                    if endpoint:
-                        self._transport.send_encrypted(packet, endpoint)
+                for packet in packets:
+                    # Parse IPv4 destination IP
+                    if len(packet) >= 20 and (packet[0] >> 4) == 4:
+                        dst_ip = f"{packet[16]}.{packet[17]}.{packet[18]}.{packet[19]}"
+                        with self._lock:
+                            endpoint = self._client_endpoints.get(dst_ip)
+                        if endpoint:
+                            self._transport.send_encrypted(packet, endpoint)
+                            self.metrics.add_sent(len(packet))
             except Exception as exc:
                 if not self._stop_event.is_set():
                     self.metrics.add_dropped()

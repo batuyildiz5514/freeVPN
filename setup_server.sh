@@ -52,13 +52,17 @@ fi
 KEY=$(./venv/bin/python3 -c "import json; print(json.load(open('config.json'))['pre_shared_key'])")
 PUBLIC_IP=$(curl -s -4 ifconfig.me || curl -s -4 icanhazip.com || echo "YOUR_SERVER_IP")
 
-echo "[4/5] Opening firewall for UDP port 51820..."
+echo "[4/5] Opening firewall for UDP port 51820 and configuring high-throughput forwarding..."
 # UFW if active
 if command -v ufw >/dev/null 2>&1; then
     ufw allow 51820/udp || true
 fi
 # Oracle Cloud iptables rules
 iptables -I INPUT -p udp --dport 51820 -j ACCEPT || true
+# Forwarding and TCP MSS clamping for Oracle Cloud (prevents PMTU blackholes on 9000 MTU)
+iptables -I FORWARD 1 -m state --state RELATED,ESTABLISHED -j ACCEPT || true
+iptables -I FORWARD 2 -i tun0 -j ACCEPT || true
+iptables -t mangle -I FORWARD 1 -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --set-mss 1360 || true
 
 echo "[5/5] Creating and starting systemd background service (pyvpn.service)..."
 cat <<EOF > /etc/systemd/system/pyvpn.service

@@ -34,6 +34,10 @@ class LinuxTunDevice:
         # Allocate TUN interface
         ifr = struct.pack("16sH", dev_name.encode("ascii"), IFF_TUN | IFF_NO_PI)
         fcntl.ioctl(self._fd, TUNSETIFF, ifr)
+        
+        # Set file descriptor to non-blocking for high-throughput drain loops
+        os.set_blocking(self._fd, False)
+        
         self._setup_network()
 
     def _setup_network(self) -> None:
@@ -66,17 +70,34 @@ class LinuxTunDevice:
         subprocess.run(f"iptables -A FORWARD -i {self.dev_name} -j ACCEPT 2>/dev/null", shell=True)
         subprocess.run(f"iptables -A FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT 2>/dev/null", shell=True)
 
-    def read_packet(self, timeout_ms: int = 100, max_size: int = 2048) -> Optional[bytes]:
-        """Reads a decrypted raw IP packet from Linux kernel with non-blocking timeout."""
+        # 6. Clamp TCP MSS to 1360 to prevent MTU fragmentation blackholes on cloud networks (e.g. Oracle Cloud 9000 MTU)
+        mss_check = "iptables -t mangle -C FORWARD -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --set-mss 1360 2>/dev/null"
+        if subprocess.run(mss_check, shell=True).returncode != 0:
+            subprocess.run("iptables -t mangle -I FORWARD 1 -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --set-mss 1360", shell=True)
+
+    def read_packets(self, max_packets: int = 64, timeout_ms: int = 20, max_size: int = 2048) -> list[bytes]:
+        """Reads a burst of packets from Linux TUN kernel buffer using non-blocking drain."""
         assert self._fd is not None
         timeout_sec = (timeout_ms / 1000.0) if timeout_ms else 0.0
         r, _, _ = select.select([self._fd], [], [], timeout_sec)
         if not r:
-            return None
-        try:
-            return os.read(self._fd, max_size)
-        except OSError:
-            return None
+            return []
+
+        packets = []
+        while len(packets) < max_packets:
+            try:
+                pkt = os.read(self._fd, max_size)
+                if not pkt:
+                    break
+                packets.append(pkt)
+            except (BlockingIOError, OSError):
+                break
+        return packets
+
+    def read_packet(self, timeout_ms: int = 20, max_size: int = 2048) -> Optional[bytes]:
+        """Reads a single raw IP packet from Linux kernel with non-blocking timeout."""
+        pkts = self.read_packets(max_packets=1, timeout_ms=timeout_ms, max_size=max_size)
+        return pkts[0] if pkts else None
 
     def write_packet(self, packet: bytes) -> bool:
         """Injects a packet into the Linux kernel for NAT internet forwarding."""
