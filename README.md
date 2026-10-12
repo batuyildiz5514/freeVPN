@@ -74,7 +74,7 @@ This repository is designed from day one to be safely published on GitHub:
 
 - [x] **Phase 1: Cryptographic UDP Tunnel Core**
   - Implement and test secure UDP socket exchange with ChaCha20-Poly1305 authenticated encryption.
-- [ ] **Phase 2: Windows Wintun Driver Integration**
+- [x] **Phase 2: Windows Wintun Driver Integration**
   - Bind `wintun.dll` via Python `ctypes` and initialize ring buffers for raw packet I/O.
 - [ ] **Phase 3: End-to-End Packet Tunneling**
   - Bidirectional packet routing between the virtual interface and the encrypted UDP transport.
