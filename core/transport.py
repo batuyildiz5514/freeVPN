@@ -11,7 +11,7 @@ from core.crypto import CryptoSession, DecryptionError
 class EncryptedUDPTransport:
     """Provides encrypted datagram transmission and reception over UDP."""
 
-    DEFAULT_SOCKET_BUFFER = 2 * 1024 * 1024  # 2 MB buffer for high throughput
+    DEFAULT_SOCKET_BUFFER = 4 * 1024 * 1024  # 4 MB buffer for maximum UDP throughput
 
     def __init__(self, crypto_session: CryptoSession, sock: Optional[socket.socket] = None):
         self.crypto = crypto_session
@@ -46,21 +46,45 @@ class EncryptedUDPTransport:
         return self.sock.sendto(encrypted_packet, destination)
 
     def recv_encrypted(self, max_size: int = 2048) -> Tuple[bytes, Tuple[str, int]]:
-        """Receives a UDP datagram, authenticates and decrypts it.
-        
-        Args:
-            max_size: Maximum datagram size to read from socket.
-            
-        Returns:
-            Tuple[bytes, Tuple[str, int]]: (Decrypted plaintext payload, sender address tuple)
-            
-        Raises:
-            DecryptionError: If the datagram fails authentication or is tampered with.
-            socket.timeout: If socket timeout expires.
-        """
+        """Receives a UDP datagram, authenticates and decrypts it."""
         raw_data, sender = self.sock.recvfrom(max_size)
         plaintext = self.crypto.decrypt(raw_data)
         return plaintext, sender
+
+    def recv_encrypted_batch(self, max_batch: int = 64, max_size: int = 2048) -> list[Tuple[bytes, Tuple[str, int]]]:
+        """Receives a batch of available datagrams from the UDP socket.
+        
+        Blocks for the first datagram up to the configured socket timeout.
+        If a datagram is received, drains remaining ready datagrams in a non-blocking loop
+        up to max_batch to maximize throughput under heavy load.
+        """
+        batch: list[Tuple[bytes, Tuple[str, int]]] = []
+        try:
+            raw_data, sender = self.sock.recvfrom(max_size)
+            try:
+                plaintext = self.crypto.decrypt(raw_data)
+                batch.append((plaintext, sender))
+            except DecryptionError:
+                pass
+        except (socket.timeout, OSError):
+            return batch
+
+        # Non-blocking drain of remaining queued datagrams in socket buffer
+        self.sock.setblocking(False)
+        try:
+            while len(batch) < max_batch:
+                raw_data, sender = self.sock.recvfrom(max_size)
+                try:
+                    plaintext = self.crypto.decrypt(raw_data)
+                    batch.append((plaintext, sender))
+                except DecryptionError:
+                    pass
+        except (BlockingIOError, socket.error):
+            pass
+        finally:
+            self.sock.settimeout(0.05)
+
+        return batch
 
     def close(self) -> None:
         """Safely close the underlying UDP socket."""

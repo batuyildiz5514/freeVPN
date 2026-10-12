@@ -47,6 +47,8 @@ class PyVPNApp(ctk.CTk):
         self.routing: Optional[RoutingManager] = None
         self.is_connected = False
         self.is_connecting = False
+        self._smoothed_tx_kbps = 0.0
+        self._smoothed_rx_kbps = 0.0
 
         self._build_ui()
         self._init_tray()
@@ -340,17 +342,35 @@ class PyVPNApp(ctk.CTk):
     def _poll_metrics(self) -> None:
         if self.is_connected and self.tunnel:
             stats = self.tunnel.metrics.snapshot()
-            up_kbps = stats["upload_kbps"]
-            down_kbps = stats["download_kbps"]
+            raw_up = stats["upload_kbps"]
+            raw_down = stats["download_kbps"]
             tx_mb = stats["bytes_sent"] / (1024 * 1024)
             rx_mb = stats["bytes_recv"] / (1024 * 1024)
 
-            self.tx_speed_label.configure(text=self._format_speed(up_kbps))
+            # Smooth speed gauge using Exponential Moving Average to prevent wild flickering
+            alpha = 0.45
+            if raw_up > self._smoothed_tx_kbps:
+                self._smoothed_tx_kbps = (alpha * raw_up) + ((1.0 - alpha) * self._smoothed_tx_kbps)
+            else:
+                self._smoothed_tx_kbps = max(0.0, self._smoothed_tx_kbps * 0.6)
+                if self._smoothed_tx_kbps < 1.0:
+                    self._smoothed_tx_kbps = 0.0
+
+            if raw_down > self._smoothed_rx_kbps:
+                self._smoothed_rx_kbps = (alpha * raw_down) + ((1.0 - alpha) * self._smoothed_rx_kbps)
+            else:
+                self._smoothed_rx_kbps = max(0.0, self._smoothed_rx_kbps * 0.6)
+                if self._smoothed_rx_kbps < 1.0:
+                    self._smoothed_rx_kbps = 0.0
+
+            self.tx_speed_label.configure(text=self._format_speed(self._smoothed_tx_kbps))
             self.tx_total_label.configure(text=f"Total: {tx_mb:.2f} MB")
 
-            self.rx_speed_label.configure(text=self._format_speed(down_kbps))
+            self.rx_speed_label.configure(text=self._format_speed(self._smoothed_rx_kbps))
             self.rx_total_label.configure(text=f"Total: {rx_mb:.2f} MB")
         else:
+            self._smoothed_tx_kbps = 0.0
+            self._smoothed_rx_kbps = 0.0
             self.tx_speed_label.configure(text="0.0 Kbps")
             self.rx_speed_label.configure(text="0.0 Kbps")
 

@@ -137,17 +137,13 @@ class ClientTunnel:
 
         while not self._stop_event.is_set():
             try:
-                decrypted_payload, _sender = self._transport.recv_encrypted()
-                if decrypted_payload:
-                    success = self._wintun_session.write_packet(decrypted_payload)
-                    if success:
-                        self.metrics.add_recv(len(decrypted_payload))
-                    else:
-                        self.metrics.add_dropped()
-            except socket.timeout:
-                continue
-            except DecryptionError:
-                self.metrics.add_dropped()
+                batch = self._transport.recv_encrypted_batch(max_batch=64)
+                for decrypted_payload, _sender in batch:
+                    if decrypted_payload:
+                        if self._wintun_session.write_packet(decrypted_payload):
+                            self.metrics.add_recv(len(decrypted_payload))
+                        else:
+                            self.metrics.add_dropped()
             except Exception:
                 if not self._stop_event.is_set():
                     self.metrics.add_dropped()
@@ -230,26 +226,23 @@ class ServerTunnel:
 
         while not self._stop_event.is_set():
             try:
-                packet, sender = self._transport.recv_encrypted()
-                self.metrics.add_recv(len(packet))
+                batch = self._transport.recv_encrypted_batch(max_batch=64)
+                for packet, sender in batch:
+                    self.metrics.add_recv(len(packet))
 
-                # Parse IPv4 source IP to map client endpoint
-                if len(packet) >= 20 and (packet[0] >> 4) == 4:
-                    src_ip = f"{packet[12]}.{packet[13]}.{packet[14]}.{packet[15]}"
-                    with self._lock:
-                        self._client_endpoints[src_ip] = sender
+                    # Parse IPv4 source IP to map client endpoint
+                    if len(packet) >= 20 and (packet[0] >> 4) == 4:
+                        src_ip = f"{packet[12]}.{packet[13]}.{packet[14]}.{packet[15]}"
+                        with self._lock:
+                            self._client_endpoints[src_ip] = sender
 
-                if self._tun_session:
-                    self._tun_session.write_packet(packet)
-                else:
-                    # Echo mode if running without server TUN adapter
-                    self._transport.send_encrypted(packet, sender)
-                    self.metrics.add_sent(len(packet))
+                    if self._tun_session:
+                        self._tun_session.write_packet(packet)
+                    else:
+                        # Echo mode if running without server TUN adapter
+                        self._transport.send_encrypted(packet, sender)
+                        self.metrics.add_sent(len(packet))
 
-            except socket.timeout:
-                continue
-            except DecryptionError:
-                self.metrics.add_dropped()
             except Exception:
                 if not self._stop_event.is_set():
                     self.metrics.add_dropped()
