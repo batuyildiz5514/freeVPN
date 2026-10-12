@@ -14,8 +14,8 @@ EXAMPLE_CONFIG_FILE = Path(__file__).resolve().parent.parent / "config.example.j
 DEFAULT_CONFIG: Dict[str, Any] = {
     "server_host": "127.0.0.1",
     "server_port": 51820,
-    "client_ip": "10.0.0.2",
-    "server_vpn_ip": "10.0.0.1",
+    "client_ip": "10.8.0.2",
+    "server_vpn_ip": "10.8.0.1",
     "subnet_mask": "255.255.255.0",
     "dns_server": "1.1.1.1",
     "pre_shared_key": "",

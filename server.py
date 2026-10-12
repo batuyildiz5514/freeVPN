@@ -33,7 +33,7 @@ def main():
         try:
             from core.linux_tun import LinuxTunDevice
             print("[*] Linux detected. Initializing kernel TUN interface (tun0) with NAT masquerading...")
-            tun_dev = LinuxTunDevice(dev_name="tun0", ip_cidr="10.0.0.1/24")
+            tun_dev = LinuxTunDevice(dev_name="tun0", ip_cidr="10.8.0.1/24")
             print("[✓] Linux TUN device and iptables NAT configured successfully.")
         except Exception as exc:
             print(f"[!] Warning: Could not initialize Linux TUN ({exc}). Running in relay mode.")

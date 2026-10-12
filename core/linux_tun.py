@@ -21,7 +21,7 @@ IFF_NO_PI = 0x1000
 class LinuxTunDevice:
     """Manages a native Linux TUN device (/dev/net/tun) with kernel NAT masquerade."""
 
-    def __init__(self, dev_name: str = "tun0", ip_cidr: str = "10.0.0.1/24", mtu: int = 1420):
+    def __init__(self, dev_name: str = "tun0", ip_cidr: str = "10.8.0.1/24", mtu: int = 1420):
         if not HAS_FCNTL:
             raise OSError("Linux TUN interface requires fcntl (Linux host required).")
 
