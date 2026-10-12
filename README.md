@@ -76,7 +76,7 @@ This repository is designed from day one to be safely published on GitHub:
   - Implement and test secure UDP socket exchange with ChaCha20-Poly1305 authenticated encryption.
 - [x] **Phase 2: Windows Wintun Driver Integration**
   - Bind `wintun.dll` via Python `ctypes` and initialize ring buffers for raw packet I/O.
-- [ ] **Phase 3: End-to-End Packet Tunneling**
+- [x] **Phase 3: End-to-End Packet Tunneling**
   - Bidirectional packet routing between the virtual interface and the encrypted UDP transport.
 - [ ] **Phase 4: Routing Table & DNS Management**
   - Automatic default gateway switching and leak-free DNS routing via Windows IP Helper APIs.
